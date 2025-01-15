@@ -1,0 +1,42 @@
+{
+    "bedbug": {
+        "scientific_name": "Cimex lectularius",
+        "recommendations": [
+            "Inspect and identify infested areas",
+            "Clean and declutter infested rooms",
+            "Wash and dry clothes and bedding at high temperatures",
+            "Seal cracks and crevices in walls and furniture"
+        ],
+        "control_measures": [
+            "Use mattress encasements",
+            "Steam treatment of infested items",
+            "Regular monitoring with bed bug interceptors",
+            "Professional heat treatment"
+        ],
+        "pesticides": [
+            "Pyrethroids",
+            "Neonicotinoids",
+            "Desiccants (e.g., diatomaceous earth)"
+        ]
+    },
+    "cockroach": {
+        "scientific_name": "Blattodea",
+        "recommendations": [
+            "Keep kitchen and bathroom areas clean and dry",
+            "Store food in sealed containers",
+            "Fix water leaks and reduce moisture",
+            "Seal entry points around pipes and walls"
+        ],
+        "control_measures": [
+            "Use cockroach baits and traps",
+            "Regular cleaning and sanitation",
+            "Remove food and water sources",
+            "Exclusion methods (sealing entry points)"
+        ],
+        "pesticides": [
+            "Boric acid",
+            "Fipronil-based baits",
+            "Hydramethylnon gel baits"
+        ]
+    }
+}
