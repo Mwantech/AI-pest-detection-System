@@ -1,0 +1,66 @@
+{
+    "bedbug": {
+        "scientific_name": "Cimex lectularius",
+        "recommendations": [
+            "Inspect and identify infested areas",
+            "Clean and declutter infested rooms",
+            "Wash and dry clothes and bedding at high temperatures",
+            "Seal cracks and crevices in walls and furniture"
+        ],
+        "control_measures": [
+            "Use mattress encasements",
+            "Steam treatment of infested items",
+            "Regular monitoring with bed bug interceptors",
+            "Professional heat treatment"
+        ],
+        "pesticides": [
+            "Pyrethroids",
+            "Neonicotinoids",
+            "Desiccants (e.g., diatomaceous earth)"
+        ]
+    },
+    "cockroach": {
+        "scientific_name": "Blattodea",
+        "recommendations": [
+            "Keep kitchen and bathroom areas clean and dry",
+            "Store food in sealed containers",
+            "Fix water leaks and reduce moisture",
+            "Seal entry points around pipes and walls"
+        ],
+        "control_measures": [
+            "Use cockroach baits and traps",
+            "Regular cleaning and sanitation",
+            "Remove food and water sources",
+            "Exclusion methods (sealing entry points)"
+        ],
+        "pesticides": [
+            "Boric acid",
+            "Fipronil-based baits",
+            "Hydramethylnon gel baits"
+        ]
+    },
+    "ant": {
+        "scientific_name": "Formicidae",
+        "recommendations": [
+            "Identify and seal entry points around the building",
+            "Keep food in sealed containers",
+            "Clean up spills and crumbs immediately",
+            "Remove standing water and fix leaks",
+            "Trim vegetation away from building"
+        ],
+        "control_measures": [
+            "Place ant baits along ant trails",
+            "Use natural deterrents like vinegar or lemon juice",
+            "Remove ant colonies near the building",
+            "Maintain cleanliness in food preparation areas",
+            "Regular perimeter treatment"
+        ],
+        "pesticides": [
+            "Boric acid baits",
+            "Fipronil-based products",
+            "Hydramethylnon",
+            "Natural pyrethrin sprays",
+            "Growth regulators (IGRs)"
+        ]
+    }
+}

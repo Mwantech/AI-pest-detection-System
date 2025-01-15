@@ -1,2 +1,0 @@
-pip install google-generativeai
-AIzaSyDTDP-rsd9hNi7D6SPTQfONuhOEdSwb-Gg

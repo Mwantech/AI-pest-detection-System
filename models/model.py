@@ -11,8 +11,7 @@ from pathlib import Path
 import os
 
 class PestClassifier:
-    def __init__(self, num_classes, learning_rate=0.001):
-        # Initialize model using ResNet18 with transfer learning
+    def __init__(self, num_classes, class_to_idx=None, learning_rate=0.001):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = resnet18(pretrained=True)
         
@@ -21,14 +20,20 @@ class PestClassifier:
         self.model.fc = nn.Linear(num_features, num_classes)
         self.model = self.model.to(self.device)
         
+        # Store class mapping
+        self.class_to_idx = class_to_idx
+        self.idx_to_class = {v: k for k, v in class_to_idx.items()} if class_to_idx else None
+        
         # Define loss function and optimizer
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
-        
+
     def train_model(self, train_loader, val_loader, num_epochs):
         train_losses = []
         val_losses = []
         best_accuracy = 0.0
+        
+        print(f"Training with class mapping: {self.class_to_idx}")
         
         for epoch in range(num_epochs):
             # Training phase
@@ -70,10 +75,14 @@ class PestClassifier:
             val_losses.append(epoch_val_loss)
             accuracy = 100. * correct / total
             
-            # Save best model
+            # Save best model with class mapping
             if accuracy > best_accuracy:
                 best_accuracy = accuracy
-                torch.save(self.model.state_dict(), 'pest_classifier.pth')
+                save_dict = {
+                    'state_dict': self.model.state_dict(),
+                    'class_to_idx': self.class_to_idx
+                }
+                torch.save(save_dict, 'pest_classifier.pth')
             
             print(f'Epoch [{epoch+1}/{num_epochs}]')
             print(f'Training Loss: {epoch_train_loss:.4f}')
@@ -83,13 +92,9 @@ class PestClassifier:
         return train_losses, val_losses
 
 def prepare_data(data_dir, batch_size=32):
-    # Get the absolute path to the dataset directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
     dataset_path = os.path.join(current_dir, data_dir)
     
-    print(f"Looking for dataset in: {dataset_path}")
-    
-    # Define data transforms with augmentation for training
     train_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
@@ -111,70 +116,44 @@ def prepare_data(data_dir, batch_size=32):
     train_path = os.path.join(dataset_path, 'train')
     val_path = os.path.join(dataset_path, 'val')
     
-    # Updated required classes to match actual folder names
-    required_classes = ['bedbugs', 'cockroach', 'ants']
-    
-    # Verify paths and structure
-    for path in [train_path, val_path]:
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Directory not found at: {path}")
-        for class_name in required_classes:
-            class_path = os.path.join(path, class_name)
-            if not os.path.exists(class_path):
-                raise FileNotFoundError(f"Class directory '{class_name}' not found at: {class_path}")
-    
+    # Load training dataset first to establish class mapping
     train_dataset = ImageFolder(train_path, transform=train_transform)
-    val_dataset = ImageFolder(val_path, transform=val_transform)
+    class_to_idx = train_dataset.class_to_idx
+    print(f"Class to index mapping: {class_to_idx}")
     
-    print(f"Found {len(train_dataset.classes)} classes: {train_dataset.classes}")
+    # Use same class mapping for validation dataset
+    val_dataset = ImageFolder(val_path, transform=val_transform, 
+                            target_transform=lambda x: list(class_to_idx.values()).index(x))
     
-    # Create data loaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size)
     
-    return train_loader, val_loader, len(train_dataset.classes)
+    return train_loader, val_loader, len(train_dataset.classes), class_to_idx
 
 def main():
     data_dir = 'pest_dataset'
     
     try:
-        print("Preparing to train pest classifier with the following classes:")
-        print("1. bedbugs")  # Updated to match folder name
-        print("2. cockroach")
-        print("3. ants")    # Changed from "other" to match folder name
-        print("\nEnsuring correct directory structure...")
-        
-        train_loader, val_loader, num_classes = prepare_data(data_dir)
+        print("\nLoading and preparing datasets...")
+        train_loader, val_loader, num_classes, class_to_idx = prepare_data(data_dir)
         
         print("\nInitializing model...")
-        model = PestClassifier(num_classes)
+        model = PestClassifier(num_classes, class_to_idx=class_to_idx)
+        
         print("Starting training...")
         train_losses, val_losses = model.train_model(train_loader, val_loader, num_epochs=20)
         
-        # Save the final model
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(current_dir, 'pest_classifier.pth')
-        torch.save(model.model.state_dict(), model_path)
-        print(f"\nModel saved to: {model_path}")
+        # Save the final model with class mapping
+        save_dict = {
+            'state_dict': model.model.state_dict(),
+            'class_to_idx': model.class_to_idx
+        }
+        torch.save(save_dict, 'pest_classifier_final.pth')
+        print(f"\nFinal model saved with class mapping")
         
     except Exception as e:
         print(f"\nError occurred: {str(e)}")
-        print("\nPlease ensure your directory structure looks like this:")
-        print("pest_dataset/")
-        print("├── train/")
-        print("│   ├── bedbug/")    # Updated folder names
-        print("│   │   └── images...")
-        print("│   ├── cockroach/")
-        print("│   │   └── images...")
-        print("│   └── ants/")      # Updated folder name
-        print("│       └── images...")
-        print("└── val/")
-        print("    ├── bedbug/")    # Updated folder names
-        print("    │   └── images...")
-        print("    ├── cockroach/")
-        print("    │   └── images...")
-        print("    └── ants/")      # Updated folder name
-        print("        └── images...")
+        print("\nPlease ensure your directory structure is correct")
 
 if __name__ == "__main__":
     main()
