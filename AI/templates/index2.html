@@ -1,0 +1,84 @@
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('imageInput');
+    if (!fileInput.files.length) {
+        alert('Please select an image first.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+    
+    // Show loading spinner
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('results').style.display = 'none';
+    
+    try {
+        const response = await fetch('http://localhost:3000/api/detect-pest', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to process image');
+        }
+        
+        const data = await response.json();
+        
+        // Display results
+        document.getElementById('previewImage').src = `data:image/jpeg;base64,${data.image}`;
+        
+        // Show predictions
+        const predictionsHtml = data.predictions.map(pred => `
+            <div class="mb-2">
+                <div class="d-flex justify-content-between">
+                    <span>${pred.class}</span>
+                    <span>${pred.confidence.toFixed(2)}%</span>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" role="progressbar" 
+                         style="width: ${pred.confidence}%" 
+                         aria-valuenow="${pred.confidence}" 
+                         aria-valuemin="0" 
+                         aria-valuemax="100"></div>
+                </div>
+            </div>
+        `).join('');
+        
+        document.getElementById('predictionsList').innerHTML = predictionsHtml;
+        
+        // Show pest info if available
+        const pestInfoDiv = document.getElementById('pestInfo');
+        if (data.pest_info) {
+            let pestInfoHtml = `
+                <p><strong>Scientific Name:</strong> ${data.pest_info.scientific_name}</p>
+                <h5>Recommendations:</h5>
+                <ul>
+                    ${data.pest_info.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+                <h5>Control Measures:</h5>
+                <ul>
+                    ${data.pest_info.control_measures.map(measure => `<li>${measure}</li>`).join('')}
+                </ul>
+                <h5>Recommended Pesticides:</h5>
+                <ul>
+                    ${data.pest_info.pesticides.map(pesticide => `<li>${pesticide}</li>`).join('')}
+                </ul>
+            `;
+            document.getElementById('pestInfoContent').innerHTML = pestInfoHtml;
+            pestInfoDiv.style.display = 'block';
+        } else {
+            pestInfoDiv.style.display = 'none';
+        }
+        
+        document.getElementById('results').style.display = 'block';
+        
+    } catch (error) {
+        alert(error.message || 'Error processing image. Please try again.');
+        console.error(error);
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+});
