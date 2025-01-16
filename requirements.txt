@@ -1,1 +1,9 @@
 npm install express multer axios sharp cors
+
+
+# Install required dependencies
+expo install expo-camera
+expo install expo-image-picker
+expo install expo-file-system
+npm install axios
+npm install react-native-paper
