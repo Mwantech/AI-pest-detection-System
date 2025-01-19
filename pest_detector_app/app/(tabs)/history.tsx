@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
+  SafeAreaView,
+  StyleSheet,
   View,
   Text,
   FlatList,
   Image,
-  StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Card } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function ExploreScreen() {
+const HISTORY_KEY = '@pest_detection_history';
+
+const HistoryScreen = ({ navigation }) => {
   const [history, setHistory] = useState([]);
-  const router = useRouter();
 
   useEffect(() => {
     loadHistory();
@@ -21,97 +22,119 @@ export default function ExploreScreen() {
 
   const loadHistory = async () => {
     try {
-      const historyData = await AsyncStorage.getItem('pestDetectionHistory');
-      if (historyData) {
-        setHistory(JSON.parse(historyData));
+      const savedHistory = await AsyncStorage.getItem(HISTORY_KEY);
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
       }
     } catch (error) {
       console.error('Error loading history:', error);
     }
   };
 
+  const formatDate = (timestamp) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
   const renderHistoryItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.historyItem}
-      onPress={() => router.push({
-        pathname: '/results',
-        params: { 
-          imageUri: item.imageUri,
-          results: JSON.stringify(item)
-        }
-      })}
-    >
-      <Image source={{ uri: item.imageUri }} style={styles.thumbnail} />
-      <View style={styles.itemDetails}>
-        <Text style={styles.pestName}>{item.pestName || 'Unknown Pest'}</Text>
-        <Text style={styles.date}>
-          {new Date(item.date).toLocaleDateString()}
-        </Text>
-        {item.confidence && (
-          <Text style={styles.confidence}>{item.confidence}% confidence</Text>
-        )}
-      </View>
-    </TouchableOpacity>
+    <Card style={styles.historyCard}>
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Details', { item })}
+      >
+        <Card.Content>
+          <View style={styles.historyItemContent}>
+            <Image
+              source={{ uri: item.image }}
+              style={styles.thumbnailImage}
+            />
+            <View style={styles.historyItemDetails}>
+              <Text style={styles.pestName}>
+                {item.predictions[0]?.class || 'Unknown Pest'}
+              </Text>
+              <Text style={styles.timestamp}>
+                {formatDate(item.timestamp)}
+              </Text>
+              <Text style={styles.confidence}>
+                Confidence: {item.predictions[0]?.confidence.toFixed(1)}%
+              </Text>
+            </View>
+          </View>
+        </Card.Content>
+      </TouchableOpacity>
+    </Card>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Detection History</Text>
-      <FlatList
-        data={history}
-        renderItem={renderHistoryItem}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.listContent}
-        onRefresh={loadHistory}
-        refreshing={false}
-      />
+      <View style={styles.header}>
+        <Text style={styles.title}>Detection History</Text>
+      </View>
+      
+      {history.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>
+          No detection history yet
+          </Text>
+          <Text style={styles.emptyStateSubtext}>
+            Take some photos to analyze pests
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={history}
+          renderItem={renderHistoryItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
-}
+};
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
+  header: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginVertical: 20,
-    color: '#333',
+    color: '#1a1a1a',
   },
   listContent: {
-    padding: 15,
+    padding: 16,
   },
-  historyItem: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
+  historyCard: {
+    marginBottom: 12,
     borderRadius: 12,
-    padding: 15,
-    marginBottom: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    elevation: 2,
   },
-  thumbnail: {
+  historyItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  thumbnailImage: {
     width: 80,
     height: 80,
     borderRadius: 8,
+    marginRight: 16,
   },
-  itemDetails: {
+  historyItemDetails: {
     flex: 1,
-    marginLeft: 15,
-    justifyContent: 'center',
   },
   pestName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: '600',
+    color: '#1a1a1a',
     marginBottom: 4,
   },
-  date: {
+  timestamp: {
     fontSize: 14,
     color: '#666',
     marginBottom: 4,
@@ -121,4 +144,23 @@ const styles = StyleSheet.create({
     color: '#2196F3',
     fontWeight: '500',
   },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyStateText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 16,
+    color: '#999',
+    textAlign: 'center',
+  },
 });
+
+export default HistoryScreen;
