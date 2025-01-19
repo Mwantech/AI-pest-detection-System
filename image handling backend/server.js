@@ -4,16 +4,22 @@ const axios = require('axios');
 const sharp = require('sharp');
 const path = require('path');
 const cors = require('cors');
+const FormData = require('form-data');
 
 const app = express();
 const PORT = 3000;
 
-// Middleware
-app.use(cors());
+// Enhanced CORS configuration
+app.use(cors({
+  origin: ['http://localhost:19006', 'exp://localhost:19000'], // Add your Expo development URLs
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(express.static('public'));
 
-// Configure multer for image upload
+// Enhanced multer configuration
 const storage = multer.memoryStorage();
 const upload = multer({
   storage: storage,
@@ -27,93 +33,186 @@ const upload = multer({
   limits: {
     fileSize: 5 * 1024 * 1024 // 5MB limit
   }
-});
+}).single('image');
 
-// Configuration for Python API
-const PYTHON_API_URL = 'http://localhost:5000/predict';
+// Configuration
+const config = {
+  PYTHON_API_URL: 'http://localhost:5000/predict',
+  MIN_IMAGE_DIMENSION: 50,
+  MAX_IMAGE_DIMENSION: 4096,
+  COMPRESSION_QUALITY: 80,
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000, // 1 second
+};
 
-// Utility function to verify image visibility
-async function verifyImage(buffer) {
+// Enhanced image validation function
+async function validateAndProcessImage(buffer) {
   try {
+    // Get image metadata
     const metadata = await sharp(buffer).metadata();
     
-    // Check if image dimensions are valid
-    if (metadata.width < 50 || metadata.height < 50) {
-      throw new Error('Image dimensions too small. Minimum 50x50 pixels required.');
+    // Validate dimensions
+    if (metadata.width < config.MIN_IMAGE_DIMENSION || metadata.height < config.MIN_IMAGE_DIMENSION) {
+      throw new Error(`Image dimensions too small. Minimum ${config.MIN_IMAGE_DIMENSION}x${config.MIN_IMAGE_DIMENSION} pixels required.`);
+    }
+    
+    if (metadata.width > config.MAX_IMAGE_DIMENSION || metadata.height > config.MAX_IMAGE_DIMENSION) {
+      throw new Error(`Image dimensions too large. Maximum ${config.MAX_IMAGE_DIMENSION}x${config.MAX_IMAGE_DIMENSION} pixels allowed.`);
     }
 
-    // Analyze image statistics to check if it's not completely black/white/transparent
+    // Analyze image statistics
     const stats = await sharp(buffer).stats();
     
-    // Check if image is not completely black or white
+    // Check for blank or low contrast images
     const isBlank = stats.channels.every(channel => {
-      const mean = channel.mean;
-      return mean < 5 || mean > 250;
+      const { mean, stdev } = channel;
+      return (mean < 5 || mean > 250) && stdev < 3;
     });
 
     if (isBlank) {
-      throw new Error('Image appears to be blank or not visible.');
+      throw new Error('Image appears to be blank or has very low contrast.');
     }
 
-    return true;
+    // Process image for optimal quality and size
+    const processedBuffer = await sharp(buffer)
+      .normalize() // Enhance contrast
+      .jpeg({ quality: config.COMPRESSION_QUALITY })
+      .toBuffer();
+
+    return processedBuffer;
   } catch (error) {
     throw new Error(`Image validation failed: ${error.message}`);
   }
 }
 
-// Route to handle image upload and processing
-app.post('/api/detect-pest', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
-
-    // Verify image visibility
-    await verifyImage(req.file.buffer);
-
-    // Create form data for Python API
-    const formData = new FormData();
-    const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
-    formData.append('file', blob, req.file.originalname);
-
-    // Send to Python API
-    const response = await axios.post(PYTHON_API_URL, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
-
-    res.json(response.data);
-  } catch (error) {
-    if (error.response) {
-      // Error from Python API
-      res.status(error.response.status).json({
-        error: error.response.data.error || 'Error from pest detection service'
-      });
-    } else {
-      // Local error (validation, etc.)
-      res.status(400).json({
-        error: error.message || 'Error processing image'
-      });
+// Utility function for retrying failed requests
+async function retryRequest(fn, retries = config.MAX_RETRIES) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, config.RETRY_DELAY));
     }
   }
+}
+
+// Enhanced route handler for pest detection
+app.post('/api/detect-pest', (req, res) => {
+  upload(req, res, async (err) => {
+    try {
+      // Handle multer errors
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            error: 'File size too large. Maximum size is 5MB.'
+          });
+        }
+        throw err;
+      } else if (err) {
+        throw err;
+      }
+
+      // Validate request
+      if (!req.file) {
+        return res.status(400).json({ error: 'No image file provided' });
+      }
+
+      // Process and validate image
+      const processedImageBuffer = await validateAndProcessImage(req.file.buffer);
+
+      // Prepare form data for Python API
+      const formData = new FormData();
+      formData.append('file', processedImageBuffer, {
+        filename: 'processed_image.jpg',
+        contentType: 'image/jpeg'
+      });
+
+      // Send to Python API with retry mechanism
+      const response = await retryRequest(async () => {
+        const result = await axios.post(config.PYTHON_API_URL, formData, {
+          headers: {
+            ...formData.getHeaders(),
+            'Accept': 'application/json'
+          },
+          timeout: 30000, // 30 second timeout
+        });
+
+        // Validate response format
+        if (!result.data || (!result.data.predictions && !result.data.error)) {
+          throw new Error('Invalid response format from pest detection service');
+        }
+
+        return result;
+      });
+
+      // Format response
+      res.json({
+        success: true,
+        predictions: response.data.predictions,
+        pest_info: response.data.pest_info,
+        metadata: {
+          processed: true,
+          original_size: req.file.size,
+          processed_size: processedImageBuffer.length,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+    } catch (error) {
+      // Enhanced error handling
+      const errorResponse = {
+        success: false,
+        error: error.message || 'An error occurred during processing',
+        code: error.code || 'UNKNOWN_ERROR'
+      };
+
+      if (error.response) {
+        // Error from Python API
+        errorResponse.code = 'PYTHON_API_ERROR';
+        errorResponse.error = error.response.data.error || 'Error from pest detection service';
+        res.status(error.response.status).json(errorResponse);
+      } else if (error.request) {
+        // Network error
+        errorResponse.code = 'NETWORK_ERROR';
+        errorResponse.error = 'Unable to reach pest detection service';
+        res.status(503).json(errorResponse);
+      } else {
+        // Local processing error
+        res.status(400).json(errorResponse);
+      }
+
+      // Log error for debugging
+      console.error('Pest Detection Error:', {
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        stack: error.stack,
+        code: errorResponse.code
+      });
+    }
+  });
 });
 
-// Error handling middleware
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Global error handler
 app.use((error, req, res, next) => {
-  if (error instanceof multer.MulterError) {
-    if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        error: 'File size too large. Maximum size is 5MB.'
-      });
-    }
-  }
+  console.error('Global Error Handler:', error);
   res.status(500).json({
-    error: error.message || 'Internal server error'
+    success: false,
+    error: 'Internal server error',
+    code: 'INTERNAL_SERVER_ERROR'
   });
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`Node.js server running on port ${PORT}`);
+  console.log(`Python API endpoint: ${config.PYTHON_API_URL}`);
 });
