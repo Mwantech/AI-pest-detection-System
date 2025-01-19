@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  Dimensions,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,7 +18,10 @@ import axios from 'axios';
 import { Card, ProgressBar, IconButton } from 'react-native-paper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 
+const { width, height } = Dimensions.get('window');
 const API_URL = 'http://your-backend-url:3000/api/detect-pest';
 const HISTORY_KEY = '@pest_detection_history';
 
@@ -140,6 +146,7 @@ const PestDetectionScreen = () => {
   if (showCamera) {
     return (
       <View style={styles.container}>
+        <StatusBar barStyle="light-content" />
         <CameraView
           ref={cameraRef}
           style={styles.camera}
@@ -150,49 +157,60 @@ const PestDetectionScreen = () => {
             setShowCamera(false);
           }}
         >
-          <View style={styles.cameraHeader}>
+          <BlurView intensity={80} style={styles.cameraHeader}>
             <TouchableOpacity
               style={styles.backButton}
               onPress={handleBack}
             >
-              <Text style={styles.buttonText}>Back</Text>
+              <IconButton icon="arrow-left" size={24} color="white" />
             </TouchableOpacity>
+          </BlurView>
+
+          <View style={styles.cameraOverlay}>
+            <View style={styles.focusFrame} />
           </View>
 
-          <View style={styles.cameraControls}>
+          <BlurView intensity={80} style={styles.cameraControls}>
             <TouchableOpacity
               style={styles.flipButton}
               onPress={toggleCameraFacing}
             >
-              <Text style={styles.buttonText}>Flip</Text>
+              <IconButton icon="camera-flip" size={24} color="white" />
             </TouchableOpacity>
             
             <TouchableOpacity
               style={styles.captureButton}
               onPress={handleTakePicture}
             >
-              <View style={styles.captureButtonInner} />
+              <View style={styles.captureButtonInner}>
+                <View style={styles.captureButtonCore} />
+              </View>
             </TouchableOpacity>
 
-            <View style={styles.flipButton}>
-              {/* Empty view for layout balance */}
-            </View>
-          </View>
+            <TouchableOpacity style={styles.flipButton}>
+              <IconButton icon="flash" size={24} color="white" />
+            </TouchableOpacity>
+          </BlurView>
         </CameraView>
       </View>
     );
   }
 
-
   const renderPredictions = () => {
-      if (!predictions) return null;
-  
-      return predictions.map((pred, index) => (
-        <Card key={index} style={styles.predictionCard}>
+    if (!predictions) return null;
+
+    return predictions.map((pred, index) => (
+      <Card key={index} style={styles.predictionCard}>
+        <LinearGradient
+          colors={['#ffffff', '#f8f9fa']}
+          style={styles.predictionGradient}
+        >
           <Card.Content>
             <View style={styles.predictionRow}>
               <Text style={styles.predictionText}>{pred.class}</Text>
-              <Text style={styles.confidenceText}>{pred.confidence.toFixed(1)}%</Text>
+              <View style={styles.confidenceBadge}>
+                <Text style={styles.confidenceText}>{pred.confidence.toFixed(1)}%</Text>
+              </View>
             </View>
             <ProgressBar
               progress={pred.confidence / 100}
@@ -200,51 +218,58 @@ const PestDetectionScreen = () => {
               style={styles.progressBar}
             />
           </Card.Content>
-        </Card>
-      ));
-    };
-  
-    const renderPestInfo = () => {
-      if (!pestInfo) return null;
-  
-      return (
-        <Card style={styles.pestInfoCard}>
+        </LinearGradient>
+      </Card>
+    ));
+  };
+
+  const renderPestInfo = () => {
+    if (!pestInfo) return null;
+
+    return (
+      <Card style={styles.pestInfoCard}>
+        <LinearGradient
+          colors={['#ffffff', '#f8f9fa']}
+          style={styles.pestInfoGradient}
+        >
           <Card.Content>
             <Text style={styles.pestInfoTitle}>Pest Information</Text>
             <Text style={styles.scientificName}>
               Scientific Name: {pestInfo.scientific_name}
             </Text>
             
-            <Text style={styles.sectionTitle}>Recommendations:</Text>
-            {pestInfo.recommendations.map((rec, index) => (
-              <Text key={index} style={styles.listItem}>• {rec}</Text>
-            ))}
-  
-            <Text style={styles.sectionTitle}>Control Measures:</Text>
-            {pestInfo.control_measures.map((measure, index) => (
-              <Text key={index} style={styles.listItem}>• {measure}</Text>
-            ))}
-  
-            <Text style={styles.sectionTitle}>Recommended Pesticides:</Text>
-            {pestInfo.pesticides.map((pesticide, index) => (
-              <Text key={index} style={styles.listItem}>• {pesticide}</Text>
+            {['Recommendations', 'Control Measures', 'Recommended Pesticides'].map((section, idx) => (
+              <View key={idx} style={styles.infoSection}>
+                <Text style={styles.sectionTitle}>{section}</Text>
+                {pestInfo[section.toLowerCase().replace(' ', '_')].map((item, index) => (
+                  <View key={index} style={styles.listItemContainer}>
+                    <View style={styles.bullet} />
+                    <Text style={styles.listItem}>{item}</Text>
+                  </View>
+                ))}
+              </View>
             ))}
           </Card.Content>
-        </Card>
-      );
-    };
-  
-  // Rest of your render code remains the same...
+        </LinearGradient>
+      </Card>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <StatusBar barStyle="dark-content" />
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Text style={styles.title}>Pest Detection</Text>
-          <IconButton
-            icon="history"
-            size={24}
+          <TouchableOpacity
+            style={styles.historyButton}
             onPress={() => navigation.navigate('History')}
-          />
+          >
+            <IconButton icon="history" size={24} color="#2196F3" />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -252,27 +277,44 @@ const PestDetectionScreen = () => {
             style={[styles.button, styles.buttonPrimary]}
             onPress={handleShowCamera}
           >
-            <IconButton icon="camera" size={24} color="white" />
-            <Text style={styles.buttonText}>Take Photo</Text>
+            <LinearGradient
+              colors={['#2196F3', '#1976D2']}
+              style={styles.buttonGradient}
+            >
+              <IconButton icon="camera" size={24} color="white" />
+              <Text style={styles.buttonText}>Take Photo</Text>
+            </LinearGradient>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, styles.buttonSecondary]}
             onPress={pickImage}
           >
-            <IconButton icon="image" size={24} color="white" />
-            <Text style={styles.buttonText}>Gallery</Text>
+            <LinearGradient
+              colors={['#4CAF50', '#388E3C']}
+              style={styles.buttonGradient}
+            >
+              <IconButton icon="image" size={24} color="white" />
+              <Text style={styles.buttonText}>Gallery</Text>
+            </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {image && (
           <Card style={styles.imageCard}>
-            <Card.Cover source={{ uri: image }} style={styles.selectedImage} />
+            <Card.Cover 
+              source={{ uri: image }} 
+              style={styles.selectedImage}
+              resizeMode="cover"
+            />
           </Card>
         )}
 
         {loading && (
-          <ActivityIndicator size="large" color="#2196F3" style={styles.loader} />
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#2196F3" />
+            <Text style={styles.loaderText}>Analyzing image...</Text>
+          </View>
         )}
 
         {renderPredictions()}
@@ -285,7 +327,7 @@ const PestDetectionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#ffffff',
   },
   scrollContent: {
     padding: 20,
@@ -294,32 +336,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#1a1a1a',
+    letterSpacing: -0.5,
+  },
+  historyButton: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   button: {
+    width: '48%',
+    height: 56,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  buttonGradient: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 15,
-    borderRadius: 12,
-    width: '48%',
-    elevation: 2,
-  },
-  buttonPrimary: {
-    backgroundColor: '#2196F3',
-  },
-  buttonSecondary: {
-    backgroundColor: '#4CAF50',
+    padding: 12,
   },
   buttonText: {
     color: 'white',
@@ -329,6 +380,7 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+    backgroundColor: '#000',
   },
   cameraHeader: {
     position: 'absolute',
@@ -337,12 +389,20 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 1,
     padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
-  backButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    padding: 10,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
+  cameraOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  focusFrame: {
+    width: width * 0.8,
+    height: width * 0.8,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 20,
   },
   cameraControls: {
     position: 'absolute',
@@ -353,15 +413,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 20,
-  },
-  flipButton: {
-    padding: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 8,
-    width: 80,
-    alignItems: 'center',
+    paddingBottom: 40,
   },
   captureButton: {
+    width: 80,
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  captureButtonInner: {
     width: 70,
     height: 70,
     borderRadius: 35,
@@ -369,82 +429,118 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  captureButtonInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  captureButtonCore: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#fff',
   },
-  cancelButton: {
-    padding: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    borderRadius: 8,
-  },
   imageCard: {
-    marginVertical: 20,
-    borderRadius: 12,
-    elevation: 3,
+    marginVertical: 24,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   selectedImage: {
     height: 300,
-    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
   },
-  loader: {
-    marginVertical: 20,
+  loaderContainer: {
+    alignItems: 'center',
+    padding: 24,
+  },
+  loaderText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
   },
   predictionCard: {
     marginVertical: 8,
-    borderRadius: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
     elevation: 2,
+  },
+  predictionGradient: {
+    padding: 16,
   },
   predictionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
   },
   predictionText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1a1a1a',
   },
+  confidenceBadge: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
   confidenceText: {
-    fontSize: 16,
-    color: '#666',
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2196F3',
   },
   progressBar: {
     height: 8,
     borderRadius: 4,
   },
   pestInfoCard: {
-    marginTop: 20,
-    borderRadius: 12,
-    elevation: 2,
+    marginTop: 24,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 3,
+  },
+  pestInfoGradient: {
+    padding: 20,
   },
   pestInfoTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#1a1a1a',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   scientificName: {
     fontSize: 16,
     fontStyle: 'italic',
     color: '#666',
-    marginBottom: 15,
+    marginBottom: 20,
+  },
+  infoSection: {
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1a1a1a',
-    marginTop: 15,
+    marginBottom: 12,
+  },
+  listItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     marginBottom: 8,
+    paddingRight: 16,
+  },
+  bullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2196F3',
+    marginTop: 8,
+    marginRight: 12,
   },
   listItem: {
+    flex: 1,
     fontSize: 16,
-    marginBottom: 6,
-    paddingLeft: 10,
+    lineHeight: 22,
     color: '#333',
   },
 });
