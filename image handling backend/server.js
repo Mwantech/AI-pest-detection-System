@@ -11,7 +11,7 @@ const PORT = 3000;
 
 // Enhanced CORS configuration
 app.use(cors({
-  origin: ['http://localhost:19006', 'exp://localhost:19000'], // Add your Expo development URLs
+  origin: ['http://192.168.151.58:8081', 'exp://localhost:8081'], // Add your Expo development URLs
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -31,13 +31,13 @@ const upload = multer({
     cb(null, true);
   },
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 10 * 1024 * 1024 // 10MB limit
   }
 }).single('image');
 
 // Configuration
 const config = {
-  PYTHON_API_URL: 'http://localhost:5000/predict',
+  PYTHON_API_URL: 'http://localhost:5000/api/predict',
   MIN_IMAGE_DIMENSION: 50,
   MAX_IMAGE_DIMENSION: 4096,
   COMPRESSION_QUALITY: 80,

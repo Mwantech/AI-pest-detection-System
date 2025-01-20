@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
-const API_URL = 'http://your-backend-url:3000/api/detect-pest';
+const API_URL = 'http://192.168.151.58:3000/api/detect-pest';
 const HISTORY_KEY = '@pest_detection_history';
 
 const PestDetectionScreen = () => {
