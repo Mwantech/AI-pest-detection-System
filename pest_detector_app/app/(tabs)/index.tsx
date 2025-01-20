@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
-const API_URL = 'http://192.168.151.58:3000/api/detect-pest';
+const API_URL = 'http://192.168.151.58:5000/api/predict';
 const HISTORY_KEY = '@pest_detection_history';
 
 const PestDetectionScreen = () => {
@@ -76,17 +76,28 @@ const PestDetectionScreen = () => {
       Alert.alert('Error', 'Camera not ready');
       return;
     }
-
+  
     try {
-      const photo = await cameraRef.current.takePictureAsync();
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.8,
+        skipProcessing: true,
+      });
+  
+      console.log('Captured photo info:', {
+        uri: photo.uri,
+        width: photo.width,
+        height: photo.height
+      });
+  
       setImage(photo.uri);
       setShowCamera(false);
       analyzePestImage(photo.uri);
     } catch (error) {
-      console.error('Error taking picture:', error);
-      Alert.alert('Error', 'Failed to take picture');
+      console.error('Camera capture error:', error);
+      Alert.alert('Error', 'Failed to take picture. Please try again.');
     }
   };
+  
 
   const toggleCameraFacing = () => {
     setFacing(current => (current === 'back' ? 'front' : 'back'));
@@ -96,17 +107,29 @@ const PestDetectionScreen = () => {
     setShowCamera(false);
   };
 
+  // Modified image picker configuration
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-      analyzePestImage(result.assets[0].uri);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+  
+      if (!result.canceled) {
+        const imageUri = result.assets[0].uri;
+        console.log('Selected image info:', {
+          width: result.assets[0].width,
+          height: result.assets[0].height
+        });
+        
+        setImage(imageUri);
+        analyzePestImage(imageUri);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
     }
   };
 
@@ -115,30 +138,52 @@ const PestDetectionScreen = () => {
       setLoading(true);
       setPredictions(null);
       setPestInfo(null);
-
+  
       const formData = new FormData();
-      formData.append('image', {
+  
+      // Handle both camera and gallery images
+      const imageFile = {
         uri: imageUri,
         type: 'image/jpeg',
-        name: 'pest_image.jpg',
-      });
-
+        name: 'pest_image.jpg'
+      };
+      
+      formData.append('image', imageFile);
+  
+      console.log('Sending request to:', API_URL);
+  
       const response = await axios.post(API_URL, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
         },
+        transformRequest: formData => formData,
       });
-
-      setPredictions(response.data.predictions);
-      setPestInfo(response.data.pest_info);
-      await saveToHistory({
-        predictions: response.data.predictions,
-        pestInfo: response.data.pest_info,
-      });
+  
+      console.log('Server response:', response.data);
+  
+      if (response.data.success) {
+        setPredictions(response.data.predictions);
+        setPestInfo(response.data.pest_info);
+        await saveToHistory({
+          predictions: response.data.predictions,
+          pestInfo: response.data.pest_info,
+        });
+      } else {
+        throw new Error(response.data.error || 'Failed to analyze image');
+      }
     } catch (error) {
+      console.error('Image analysis error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+  
       Alert.alert(
         'Error',
-        error.response?.data?.error || 'Failed to analyze image'
+        error.response?.data?.error || 
+        error.message || 
+        'Failed to analyze image. Please try a different image.'
       );
     } finally {
       setLoading(false);

@@ -11,7 +11,7 @@ const PORT = 3000;
 
 // Enhanced CORS configuration
 app.use(cors({
-  origin: ['http://192.168.151.58:8081', 'exp://localhost:8081'], // Add your Expo development URLs
+  origin: ['http://localhost:8081', 'exp://localhost:8081'], // Add your Expo development URLs
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
@@ -51,39 +51,64 @@ async function validateAndProcessImage(buffer) {
     // Get image metadata
     const metadata = await sharp(buffer).metadata();
     
-    // Validate dimensions
+    // Log image details for debugging
+    console.log('Image metadata:', {
+      width: metadata.width,
+      height: metadata.height,
+      format: metadata.format,
+      size: buffer.length
+    });
+    
+    // Validate dimensions with more specific error messages
     if (metadata.width < config.MIN_IMAGE_DIMENSION || metadata.height < config.MIN_IMAGE_DIMENSION) {
-      throw new Error(`Image dimensions too small. Minimum ${config.MIN_IMAGE_DIMENSION}x${config.MIN_IMAGE_DIMENSION} pixels required.`);
+      throw new Error(
+        `Image dimensions (${metadata.width}x${metadata.height}) are too small. ` +
+        `Minimum ${config.MIN_IMAGE_DIMENSION}x${config.MIN_IMAGE_DIMENSION} pixels required.`
+      );
     }
     
     if (metadata.width > config.MAX_IMAGE_DIMENSION || metadata.height > config.MAX_IMAGE_DIMENSION) {
-      throw new Error(`Image dimensions too large. Maximum ${config.MAX_IMAGE_DIMENSION}x${config.MAX_IMAGE_DIMENSION} pixels allowed.`);
+      // Instead of throwing error, let's resize the image
+      const processedBuffer = await sharp(buffer)
+        .resize(config.MAX_IMAGE_DIMENSION, config.MAX_IMAGE_DIMENSION, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: config.COMPRESSION_QUALITY })
+        .toBuffer();
+      
+      return processedBuffer;
     }
 
-    // Analyze image statistics
-    const stats = await sharp(buffer).stats();
-    
-    // Check for blank or low contrast images
-    const isBlank = stats.channels.every(channel => {
-      const { mean, stdev } = channel;
-      return (mean < 5 || mean > 250) && stdev < 3;
-    });
-
-    if (isBlank) {
-      throw new Error('Image appears to be blank or has very low contrast.');
-    }
-
-    // Process image for optimal quality and size
+    // Process image with more forgiving parameters
     const processedBuffer = await sharp(buffer)
-      .normalize() // Enhance contrast
-      .jpeg({ quality: config.COMPRESSION_QUALITY })
+      .jpeg({ 
+        quality: config.COMPRESSION_QUALITY,
+        force: false // Don't force JPEG if it's another format
+      })
       .toBuffer();
+
+    // Verify processed image size
+    if (processedBuffer.length > 10 * 1024 * 1024) {
+      // If still too large, compress further
+      return await sharp(processedBuffer)
+        .jpeg({ quality: 60 }) // Lower quality for large images
+        .toBuffer();
+    }
 
     return processedBuffer;
   } catch (error) {
-    throw new Error(`Image validation failed: ${error.message}`);
+    // Enhanced error logging
+    console.error('Image validation error:', {
+      originalError: error.message,
+      bufferSize: buffer ? buffer.length : 'no buffer',
+      timestamp: new Date().toISOString()
+    });
+    
+    throw new Error(`Image processing failed: ${error.message}`);
   }
 }
+
 
 // Utility function for retrying failed requests
 async function retryRequest(fn, retries = config.MAX_RETRIES) {
